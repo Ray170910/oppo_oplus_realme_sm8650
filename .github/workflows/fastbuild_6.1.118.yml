@@ -577,6 +577,68 @@ jobs:
               sed -i "\$s|echo \"\\\$res\"|echo \"-${{ env.KERNEL_NAME }}\"|" "$f"
             done
           fi
+
+      - name: 🎮 Apply GameSense patches
+        run: |
+          echo "正在下载并应用 GameSense v3.0 补丁..."
+          (
+            cd kernel_workspace/common
+            
+            # 从私有仓库下载 GameSense 补丁文件（使用 token 认证）
+            mkdir -p /tmp/gamesense
+            curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
+              "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/patch/my_mem.patch" \
+              -o /tmp/gamesense/my_mem.patch
+            curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
+              "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/patch/my_vmalloc.patch" \
+              -o /tmp/gamesense/my_vmalloc.patch
+            curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
+              "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/patch/my_base.patch" \
+              -o /tmp/gamesense/my_base.patch
+            curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
+              "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/patch/my_audit.patch" \
+              -o /tmp/gamesense/my_audit.patch
+            
+            if [ -f "/tmp/gamesense/my_mem.patch" ]; then
+              echo "[GameSense] 应用 mem.c 补丁..."
+              patch -p1 < /tmp/gamesense/my_mem.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_mem.patch || true
+            fi
+            
+            if [ -f "/tmp/gamesense/my_vmalloc.patch" ]; then
+              echo "[GameSense] 应用 vmalloc.c 补丁..."
+              patch -p1 < /tmp/gamesense/my_vmalloc.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_vmalloc.patch || true
+            fi
+
+            if [ -f "/tmp/gamesense/my_base.patch" ]; then
+              echo "[GameSense] 应用 base.c 补丁..."
+              patch -p1 < /tmp/gamesense/my_base.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_base.patch || true
+            fi
+
+            if [ -f "/tmp/gamesense/my_audit.patch" ]; then
+              echo "[GameSense] 应用 audit.c 补丁..."
+              patch -p1 < /tmp/gamesense/my_audit.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_audit.patch || true
+            fi
+          )
+          (
+            cd kernel_workspace/KernelSU
+            # 清理内核 Kbuild 中的旧版本定义
+            # 删除版本函数
+            sed -i '/define get_ksu_version_full/,/endef/d' kernel/Kbuild
+            # 删除 API 版本定义
+            sed -i '/KSU_VERSION_API :=/d' kernel/Kbuild
+            # 删除完整版本定义
+            sed -i '/KSU_VERSION_FULL :=/d' kernel/Kbuild
+            # 在 REPO_OWNER 行后插入新版本定义
+            awk -v def="$VERSION_DEFINITIONS" '
+              # 当找到 REPO_OWNER 行时，插入版本定义并设置标记
+              /REPO_OWNER :=/ {print; print def; inserted=1; next}
+              # 打印所有行
+              1
+              # 如果未找到插入点，在文件末尾追加
+              END {if (!inserted) print def}
+            ' kernel/Kbuild > kernel/Kbuild.tmp && mv kernel/Kbuild.tmp kernel/Kbuild
+          )
+          echo "✅ GameSense 补丁应用完成"
            
       - name: 构建内核
         run: |
