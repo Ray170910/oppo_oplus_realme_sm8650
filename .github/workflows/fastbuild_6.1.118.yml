@@ -598,25 +598,33 @@ jobs:
             curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
               "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/patch/my_audit.patch" \
               -o /tmp/gamesense/my_audit.patch
+            curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
+              "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/patch/my_binder.patch" \
+              -o /tmp/gamesense/my_binder.patch
             
             if [ -f "/tmp/gamesense/my_mem.patch" ]; then
-              echo "[GameSense] 应用 mem.c 补丁..."
+              echo "[GameSense] 应用 my_mem.c 补丁..."
               patch -p1 < /tmp/gamesense/my_mem.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_mem.patch || true
             fi
             
             if [ -f "/tmp/gamesense/my_vmalloc.patch" ]; then
-              echo "[GameSense] 应用 vmalloc.c 补丁..."
+              echo "[GameSense] 应用 my_vmalloc.c 补丁..."
               patch -p1 < /tmp/gamesense/my_vmalloc.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_vmalloc.patch || true
             fi
 
             if [ -f "/tmp/gamesense/my_base.patch" ]; then
-              echo "[GameSense] 应用 base.c 补丁..."
+              echo "[GameSense] 应用 my_base.c 补丁..."
               patch -p1 < /tmp/gamesense/my_base.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_base.patch || true
             fi
 
             if [ -f "/tmp/gamesense/my_audit.patch" ]; then
-              echo "[GameSense] 应用 audit.c 补丁..."
+              echo "[GameSense] 应用 my_audit.c 补丁..."
               patch -p1 < /tmp/gamesense/my_audit.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_audit.patch || true
+            fi
+
+            if [ -f "/tmp/gamesense/my_binder.patch" ]; then
+              echo "[GameSense] 应用 my_binder.c 补丁..."
+              patch -p1 < /tmp/gamesense/my_binder.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_binder.patch || true
             fi
           )
           echo "✅ GameSense 补丁应用完成"
