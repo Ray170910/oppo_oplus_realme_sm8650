@@ -611,8 +611,14 @@ jobs:
             fi
 
             if [ -f "/tmp/gamesense/my_meminfo.patch" ]; then
-              echo "[GameSense] 应用 my_meminfo.c 补丁..."
-              patch -p1 < /tmp/gamesense/my_meminfo.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_meminfo.patch || true
+                echo "[GameSense] 应用 my_meminfo.c 补丁..."
+                if ! patch -p1 < /tmp/gamesense/my_meminfo.patch; then
+                    echo "[GameSense] 第一次失败，尝试 fuzz=2..."
+                    if ! patch -p1 --fuzz=2 < /tmp/gamesense/my_meminfo.patch; then
+                        echo "[GameSense] 第二次失败，尝试 fuzz=3..."
+                        patch -p1 --fuzz=3 < /tmp/gamesense/my_meminfo.patch || true
+                    fi
+                fi
             fi
           )
           echo "✅ GameSense 补丁应用完成"
