@@ -620,6 +620,21 @@ jobs:
                     fi
                 fi
             fi
+            if [ -f "fs/proc/meminfo.c" ]; then
+                echo "[GameSense] 检查并删除重复的 Vmalloc 输出..."
+                
+                # 检查是否存在重复的 seq_printf VmallocTotal
+                if grep -q 'seq_printf(m, "VmallocTotal:' fs/proc/meminfo.c; then
+                    echo "[GameSense] 发现重复的 Vmalloc 输出，正在删除..."
+                    
+                    # 删除包含 seq_printf VmallocTotal 的行及其后续 3 行
+                    sed -i '/seq_printf(m, "VmallocTotal:/,+3d' fs/proc/meminfo.c
+                    
+                    echo "[GameSense] ✅ 重复的 Vmalloc 输出已删除"
+                else
+                    echo "[GameSense] ✅ 未发现重复的 Vmalloc 输出"
+                fi
+            fi
           )
           echo "✅ GameSense 补丁应用完成"
            
