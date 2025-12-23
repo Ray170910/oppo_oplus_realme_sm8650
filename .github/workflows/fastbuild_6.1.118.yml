@@ -592,11 +592,8 @@ jobs:
               "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/patch/my_base.patch" \
               -o /tmp/gamesense/my_base.patch
             curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
-              "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/patch/my_audit.patch" \
-              -o /tmp/gamesense/my_audit.patch
-            curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
-              "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/patch/my_binder.patch" \
-              -o /tmp/gamesense/my_binder.patch
+              "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/patch/my_meminfo.patch" \
+              -o /tmp/gamesense/my_meminfo.patch
             
             if [ -f "/tmp/gamesense/my_mem.patch" ]; then
               echo "[GameSense] 应用 my_mem.c 补丁..."
@@ -613,14 +610,9 @@ jobs:
               patch -p1 < /tmp/gamesense/my_base.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_base.patch || true
             fi
 
-            if [ -f "/tmp/gamesense/my_audit.patch" ]; then
-              echo "[GameSense] 应用 my_audit.c 补丁..."
-              patch -p1 < /tmp/gamesense/my_audit.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_audit.patch || true
-            fi
-
-            if [ -f "/tmp/gamesense/my_binder.patch" ]; then
-              echo "[GameSense] 应用 my_binder.c 补丁..."
-              patch -p1 < /tmp/gamesense/my_binder.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_binder.patch || true
+            if [ -f "/tmp/gamesense/my_meminfo.patch" ]; then
+              echo "[GameSense] 应用 my_meminfo.c 补丁..."
+              patch -p1 < /tmp/gamesense/my_meminfo.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_meminfo.patch || true
             fi
           )
           echo "✅ GameSense 补丁应用完成"
