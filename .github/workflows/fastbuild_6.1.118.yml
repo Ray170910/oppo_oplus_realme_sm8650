@@ -591,9 +591,6 @@ jobs:
             curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
               "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/patch/my_base.patch" \
               -o /tmp/gamesense/my_base.patch
-            curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
-              "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/patch/my_meminfo.patch" \
-              -o /tmp/gamesense/my_meminfo.patch
             
             if [ -f "/tmp/gamesense/my_mem.patch" ]; then
               echo "[GameSense] 应用 my_mem.c 补丁..."
@@ -608,32 +605,6 @@ jobs:
             if [ -f "/tmp/gamesense/my_base.patch" ]; then
               echo "[GameSense] 应用 my_base.c 补丁..."
               patch -p1 < /tmp/gamesense/my_base.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_base.patch || true
-            fi
-
-            if [ -f "/tmp/gamesense/my_meminfo.patch" ]; then
-                echo "[GameSense] 应用 my_meminfo.c 补丁..."
-                if ! patch -p1 < /tmp/gamesense/my_meminfo.patch; then
-                    echo "[GameSense] 第一次失败，尝试 fuzz=2..."
-                    if ! patch -p1 --fuzz=2 < /tmp/gamesense/my_meminfo.patch; then
-                        echo "[GameSense] 第二次失败，尝试 fuzz=3..."
-                        patch -p1 --fuzz=3 < /tmp/gamesense/my_meminfo.patch || true
-                    fi
-                fi
-            fi
-            if [ -f "fs/proc/meminfo.c" ]; then
-                echo "[GameSense] 检查并删除重复的 Vmalloc 输出..."
-                
-                # 检查是否存在重复的 seq_printf VmallocTotal
-                if grep -q 'seq_printf(m, "VmallocTotal:' fs/proc/meminfo.c; then
-                    echo "[GameSense] 发现重复的 Vmalloc 输出，正在删除..."
-                    
-                    # 删除包含 seq_printf VmallocTotal 的行及其后续 3 行
-                    sed -i '/seq_printf(m, "VmallocTotal:/,+3d' fs/proc/meminfo.c
-                    
-                    echo "[GameSense] ✅ 重复的 Vmalloc 输出已删除"
-                else
-                    echo "[GameSense] ✅ 未发现重复的 Vmalloc 输出"
-                fi
             fi
           )
           echo "✅ GameSense 补丁应用完成"
