@@ -586,22 +586,12 @@ jobs:
               "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/patch/my_mem.patch" \
               -o /tmp/gamesense/my_mem.patch
             curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
-              "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/patch/my_vmalloc.patch" \
-              -o /tmp/gamesense/my_vmalloc.patch
-            curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
               "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/patch/my_base.patch" \
               -o /tmp/gamesense/my_base.patch
-            
             if [ -f "/tmp/gamesense/my_mem.patch" ]; then
               echo "[GameSense] 应用 my_mem.c 补丁..."
               patch -p1 < /tmp/gamesense/my_mem.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_mem.patch || true
             fi
-            
-            if [ -f "/tmp/gamesense/my_vmalloc.patch" ]; then
-              echo "[GameSense] 应用 my_vmalloc.c 补丁..."
-              patch -p1 < /tmp/gamesense/my_vmalloc.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_vmalloc.patch || true
-            fi
-
             if [ -f "/tmp/gamesense/my_base.patch" ]; then
               echo "[GameSense] 应用 my_base.c 补丁..."
               patch -p1 < /tmp/gamesense/my_base.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_base.patch || true
