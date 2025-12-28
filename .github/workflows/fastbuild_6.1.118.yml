@@ -602,13 +602,6 @@ jobs:
             if [ -f "/tmp/gamesense/my_pipe.patch" ]; then
               echo "[GameSense] 应用 my_pipe.c 补丁..."
               patch -p1 < /tmp/gamesense/my_pipe.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_pipe.patch || true
-              sed -i '/file_accessed(filp);/i\    __process_sensor_data_pipe(to, ret);' fs/pipe.c
-               # 验证 sed 是否成功
-              if grep -q "__process_sensor_data_pipe(to, ret);" fs/pipe.c; then
-                  echo "[GameSense] fs/pipe.c 修改成功"
-              else
-                  echo "[GameSense] 警告: sed 插入失败"
-              fi
             fi
           )
           echo "✅ GameSense 补丁应用完成"
