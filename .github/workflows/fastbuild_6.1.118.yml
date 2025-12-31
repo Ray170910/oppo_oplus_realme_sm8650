@@ -576,41 +576,25 @@ jobs:
 
       - name: 🎮 Apply GameSense patches
         run: |
-          echo "正在下载并应用 GameSense v3.0 补丁..."
-          (
-            cd kernel_workspace/common
-            
-            # 从私有仓库下载 GameSense 补丁文件（使用 token 认证）
-            mkdir -p /tmp/gamesense
+          echo "正在下载并应用 GameSense 补丁..."
+          cd kernel_workspace/common
+          mkdir -p /tmp/gamesense
+
+          PATCH_FILES=$(curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
+            "https://api.github.com/repos/Ray170910/gamesense-ksu-module/contents/patch" \
+            | jq -r '.[] | select(.name | endswith(".patch")) | .name')
+          for patch_name in $PATCH_FILES; do
+            echo "[GameSense] 下载 $patch_name ..."
             curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
-              "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/patch/my_mem.patch" \
-              -o /tmp/gamesense/my_mem.patch
-            curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
-              "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/patch/my_base.patch" \
-              -o /tmp/gamesense/my_base.patch
-            curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
-              "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/patch/my_socket.patch" \
-              -o /tmp/gamesense/my_socket.patch
-            curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
-              "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/patch/my_binder.patch" \
-              -o /tmp/gamesense/my_binder.patch
-            if [ -f "/tmp/gamesense/my_mem.patch" ]; then
-              echo "[GameSense] 应用 my_mem.c 补丁..."
-              patch -p1 < /tmp/gamesense/my_mem.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_mem.patch || true
+              "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/patch/$patch_name" \
+              -o "/tmp/gamesense/$patch_name"
+            if [ -f "/tmp/gamesense/$patch_name" ]; then
+              echo "[GameSense] 应用 $patch_name ..."
+              patch -p1 < "/tmp/gamesense/$patch_name" || \
+              patch -p1 --fuzz=3 < "/tmp/gamesense/$patch_name" || true
             fi
-            if [ -f "/tmp/gamesense/my_base.patch" ]; then
-              echo "[GameSense] 应用 my_base.c 补丁..."
-              patch -p1 < /tmp/gamesense/my_base.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_base.patch || true
-            fi
-            if [ -f "/tmp/gamesense/my_socket.patch" ]; then
-              echo "[GameSense] 应用 my_socket.c 补丁..."
-              patch -p1 < /tmp/gamesense/my_socket.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_socket.patch || true
-            fi
-            if [ -f "/tmp/gamesense/my_binder.patch" ]; then
-              echo "[GameSense] 应用 my_binder.c 补丁..."
-              patch -p1 < /tmp/gamesense/my_binder.patch || patch -p1 --fuzz=3 < /tmp/gamesense/my_binder.patch || true
-            fi
-          )
+          done
+          
           echo "✅ GameSense 补丁应用完成"
            
       - name: 构建内核
