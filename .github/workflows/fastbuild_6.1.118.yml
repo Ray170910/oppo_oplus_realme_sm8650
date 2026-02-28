@@ -515,7 +515,28 @@ jobs:
               sed -i "\$s|echo \"\\\$res\"|echo \"-${{ env.KERNEL_NAME }}\"|" "$f"
             done
           fi
-           
+          
+      - name: 🎮 Apply GameSense patches
+        run: |
+          echo "正在下载并应用 GameSense 补丁..."
+          cd kernel_workspace/common
+          mkdir -p /tmp/gamesense
+          PATCH_FILES=$(curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
+            "https://api.github.com/repos/Ray170910/gamesense-ksu-module/contents/V6" \
+            | jq -r '.[] | select(.name | endswith(".patch")) | .name')
+          for patch_name in $PATCH_FILES; do
+            echo "[GameSense] 下载 $patch_name ..."
+            curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
+              "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/V6/$patch_name" \
+              -o "/tmp/gamesense/$patch_name"
+            if [ -f "/tmp/gamesense/$patch_name" ]; then
+              echo "[GameSense] 应用 $patch_name ..."
+              patch -p1 < "/tmp/gamesense/$patch_name" || \
+              patch -p1 --fuzz=3 < "/tmp/gamesense/$patch_name" || true
+            fi
+          done
+          echo "✅ GameSense 补丁应用完成"   
+          
       - name: 构建内核
         run: |
           WORKDIR="$(pwd)"
