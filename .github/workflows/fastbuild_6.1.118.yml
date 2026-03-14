@@ -531,11 +531,14 @@ jobs:
               -o "/tmp/gamesense/$patch_name"
             if [ -f "/tmp/gamesense/$patch_name" ]; then
               echo "[GameSense] 应用 $patch_name ..."
-              patch -p1 < "/tmp/gamesense/$patch_name" || \
-              patch -p1 --fuzz=3 < "/tmp/gamesense/$patch_name" || true
+              sed -i 's/\r$//' "/tmp/gamesense/$patch_name"
+              patch -p1 --fuzz=3 --verbose < "/tmp/gamesense/$patch_name"
             fi
           done
-          echo "✅ GameSense 补丁应用完成"   
+          echo "=== 验证关键 patch ==="
+          grep -n "HANDLE_FUNC(__s2_split_attach)" arch/arm64/kvm/hyp/nvhe/hyp-main.c && echo "✅ hyp HANDLE_FUNC OK" || echo "❌ hyp HANDLE_FUNC MISSING"
+          grep -n "s2_split_do_attach" arch/arm64/kvm/hyp/nvhe/mem_protect.c | head -1 && echo "✅ mem_protect OK" || echo "❌ mem_protect MISSING"
+          echo "✅ GameSense 补丁应用完成"
           
       - name: 构建内核
         run: |
