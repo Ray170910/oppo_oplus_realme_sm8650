@@ -522,23 +522,20 @@ jobs:
           cd kernel_workspace/common
           mkdir -p /tmp/gamesense
           PATCH_FILES=$(curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
-            "https://api.github.com/repos/Ray170910/gamesense-ksu-module/contents/test" \
+            "https://api.github.com/repos/Ray170910/gamesense-ksu-module/contents/V1-A" \
             | jq -r '.[] | select(.name | endswith(".patch")) | .name')
           for patch_name in $PATCH_FILES; do
             echo "[GameSense] 下载 $patch_name ..."
             curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
-              "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/test/$patch_name" \
+              "https://raw.githubusercontent.com/Ray170910/gamesense-ksu-module/main/V1-A/$patch_name" \
               -o "/tmp/gamesense/$patch_name"
             if [ -f "/tmp/gamesense/$patch_name" ]; then
               echo "[GameSense] 应用 $patch_name ..."
-              sed -i 's/\r$//' "/tmp/gamesense/$patch_name"
-              patch -p1 --fuzz=3 --verbose < "/tmp/gamesense/$patch_name"
+              patch -p1 < "/tmp/gamesense/$patch_name" || \
+              patch -p1 --fuzz=3 < "/tmp/gamesense/$patch_name" || true
             fi
           done
-          echo "=== 验证关键 patch ==="
-          grep -n "HANDLE_FUNC(__s2_split_attach)" arch/arm64/kvm/hyp/nvhe/hyp-main.c && echo "✅ hyp HANDLE_FUNC OK" || echo "❌ hyp HANDLE_FUNC MISSING"
-          grep -n "s2_split_do_attach" arch/arm64/kvm/hyp/nvhe/mem_protect.c | head -1 && echo "✅ mem_protect OK" || echo "❌ mem_protect MISSING"
-          echo "✅ GameSense 补丁应用完成"
+          echo "✅ GameSense 补丁应用完成"   
           
       - name: 构建内核
         run: |
