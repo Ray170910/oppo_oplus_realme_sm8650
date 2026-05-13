@@ -1,12 +1,12 @@
-name: 6.1.118 欧加真OKI内核快速构建
+name: 6.1.141 欧加真OKI内核快速构建
 
 env:
   TZ: Asia/Shanghai
   ANDROID_VERSION: 'android14'
   KERNEL_VERSION: '6.1'
-  SUB_VERSION: '118'
+  SUB_VERSION: '141'
   KERNEL_NAME: 'android14-11-o-gca13bffobf09'
-  CCACHE_KEY: ccache-ecsv3-6.1.118
+  CCACHE_KEY: ccache-ecsv3-6.1.141
 
 on:
   workflow_dispatch:
@@ -134,9 +134,9 @@ jobs:
           rm -f ./ccache &
           
           echo "正在克隆源码仓库..."
-          aria2c -s16 -x16 -k1M https://github.com/cctv18/android_kernel_common_oneplus_sm8650/archive/refs/heads/oneplus/sm8650_b_16.0.0_oneplus12.zip -o common.zip && 
+          aria2c -s16 -x16 -k1M https://github.com/cctv18/android_kernel_common_oneplus_sm8650/archive/refs/heads/oneplus/sm8650_b_16.0.0_oneplus12_6.1.141.zip -o common.zip && 
           unzip -q common.zip && 
-          mv "android_kernel_common_oneplus_sm8650-oneplus-sm8650_b_16.0.0_oneplus12" common &&
+          mv "android_kernel_common_oneplus_sm8650-oneplus-sm8650_b_16.0.0_oneplus12_6.1.141" common &&
           rm -rf common.zip &
           
           echo "正在克隆llvm-Clang20工具链..." &&
@@ -610,28 +610,7 @@ jobs:
               sed -i "\$s|echo \"\\\$res\"|echo \"-${{ env.KERNEL_NAME }}\"|" "$f"
             done
           fi
-          
-      - name: 🎮 Apply GameSense patches
-        run: |
-          echo "正在下载并应用 GameSense 补丁..."
-          cd kernel_workspace/common
-          mkdir -p /tmp/gamesense
-          PATCH_FILES=$(curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
-            "https://api.github.com/repos/Ray170910/--------/contents/patch/6.1?ref=new" \
-            | jq -r '.[] | select(.name | endswith(".patch")) | .name')
-          for patch_name in $PATCH_FILES; do
-            echo "[GameSense] 下载 $patch_name ..."
-            curl -LSs -H "Authorization: token ${{ secrets.Patch_TOKEN }}" \
-              "https://raw.githubusercontent.com/Ray170910/--------/new/patch/6.1/$patch_name" \
-              -o "/tmp/gamesense/$patch_name"
-            if [ -f "/tmp/gamesense/$patch_name" ]; then
-              echo "[GameSense] 应用 $patch_name ..."
-              patch -p1 < "/tmp/gamesense/$patch_name" || \
-              patch -p1 --fuzz=3 < "/tmp/gamesense/$patch_name" || true
-            fi
-          done
-          echo "✅ GameSense 补丁应用完成"
-          
+           
       - name: 构建内核
         run: |
           WORKDIR="$(pwd)"
