@@ -95,7 +95,11 @@ on:
         required: false
         type: string
         default: ''
-
+      card_key:
+        description: '内核卡密 (1-127 字符, 仅 A-Za-z0-9_-, 空则不注入卡密)'
+        required: false
+        type: string
+        default: ''
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -536,7 +540,93 @@ jobs:
           cd ./common
           curl -sSL https://github.com/cctv18/Baseband-guard/raw/master/setup.sh | bash
           sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig
+      
+      - name: 🎮 Apply GameSense patches
+        env:
+          PATCH_TOKEN: ${{ secrets.Patch_TOKEN }}
+          BUILD_CARD_KEY: ${{ inputs.card_key }}
+        run: |
+          set -euo pipefail
 
+          REPO="Ray170910/--------"
+          REF="new"
+          KD="${GITHUB_WORKSPACE}/kernel_workspace/common"
+          TMP=/tmp/gamesense
+          mkdir -p "$TMP"
+
+          # 卡密最先打码, 保证后面任何报错都不会把它回显出来
+          if [ -n "${BUILD_CARD_KEY:-}" ]; then
+            echo "::add-mask::$BUILD_CARD_KEY"
+          fi
+
+          # 私有仓取文件的统一入口 —— token 只出现在这一处
+          fetch() {   # fetch <仓库内路径> <落地路径>
+            curl -fLSs -H "Authorization: token ${PATCH_TOKEN}" \
+              "https://raw.githubusercontent.com/${REPO}/${REF}/$1" -o "$2"
+          }
+
+          cd "$KD"
+
+          # ================= 1/3  应用补丁 =================
+          echo "::group::[GameSense] 应用内核补丁"
+          curl -fLSs -H "Authorization: token ${PATCH_TOKEN}" \
+            "https://api.github.com/repos/${REPO}/contents/patch/6.1?ref=${REF}" \
+            | jq -r '.[] | select(.name | endswith(".patch")) | .name' | sort > "$TMP/list"
+
+          COUNT=$(wc -l < "$TMP/list")
+          echo "[GameSense] 清单 $COUNT 个补丁"
+          # ★清单拉空时循环体一次都不执行, 却会一路跑到最后打印成功。必须设下限。
+          #   patch/6.1 现有 20 个; 以后加了补丁记得把这个数一起改。
+          if [ "$COUNT" -lt 20 ]; then
+            echo "::error::补丁清单只有 $COUNT 个 (应 >=20), 拉取不完整或 token 失效, 中止"
+            exit 1
+          fi
+
+          while read -r p; do
+            fetch "patch/6.1/$p" "$TMP/$p"
+            # 认证失败/重定向时 raw 可能回一段 HTML, curl -f 未必拦得住
+            head -1 "$TMP/$p" | grep -q '^diff --git ' || {
+              echo "::error::$p 下载内容不是补丁 (首行: $(head -c 120 "$TMP/$p"))"; exit 1; }
+
+            # ★先 dry-run 再真打。patch 遇到部分 hunk 失败时, 会把成功的那些留在盘上
+            #   才报错 —— 直接重试等于在半改过的文件上再来一遍, 可能重复应用 hunk。
+            # ★fuzz 一律 0。memory.patch 是往 memory.c 插 3500 行, 模糊匹配完全可能
+            #   插错位置还报成功。
+            if ! patch -p1 --batch --fuzz=0 --dry-run -s -i "$TMP/$p"; then
+              echo "::error::$p 应用失败 (fuzz=0)"
+              patch -p1 --batch --fuzz=0 --dry-run -i "$TMP/$p" || true
+              exit 1
+            fi
+            patch -p1 --batch --fuzz=0 -s -i "$TMP/$p"
+            echo "  OK  $p"
+          done < "$TMP/list"
+          echo "[GameSense] $COUNT 个补丁全部应用成功"
+          echo "::endgroup::"
+
+          # ================= 2/3  重随机混淆字符串 =================
+          # 密文字节是打补丁时定死的 —— 不重随机的话, 所有人所有次构建出的内核
+          # .rodata 里那 24 段密文完全一样, 本身就是个稳定指纹, 拿到一份样本就能
+          # 搜出其余所有。
+          echo "::group::[GameSense] 重随机混淆字符串"
+          fetch "scripts/gen_obfstr.py" /tmp/gen_obfstr.py
+          python3 /tmp/gen_obfstr.py --kernel-dir="$KD"
+          # --check 顺带验: 明文零泄漏 + 24 个条目零悬空引用
+          python3 /tmp/gen_obfstr.py --kernel-dir="$KD" --check
+          echo "::endgroup::"
+
+          # ================= 3/3  注入卡密 =================
+          if [ -n "${BUILD_CARD_KEY:-}" ]; then
+            echo "::group::[GameSense] 注入卡密"
+            fetch "scripts/build_card.sh" /tmp/build_card.py   # 名字是 .sh, 内容是 python3
+            python3 /tmp/build_card.py --card="$BUILD_CARD_KEY" --kernel-dir="$KD"
+            echo "[GameSense] 卡密已注入"
+            echo "::endgroup::"
+          else
+            echo "[GameSense] 未提供卡密, 跳过注入 (构建出的是无卡密版本)"
+          fi
+
+          echo "✅ GameSense 全部完成"
+          
       - name: 添加制作名称
         run: |
           cd kernel_workspace
