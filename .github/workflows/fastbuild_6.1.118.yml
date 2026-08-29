@@ -570,12 +570,12 @@ jobs:
             fetch "patch/6.1/$p" "$TMP/$p"
             head -1 "$TMP/$p" | grep -q '^diff --git ' || {
               echo "::error::$p 下载内容不是补丁 (首行: $(head -c 120 "$TMP/$p"))"; exit 1; }
-            if ! patch -p1 --batch --fuzz=0 --dry-run -s -i "$TMP/$p"; then
+            if ! patch -p1 --batch --fuzz=3 --dry-run -s -i "$TMP/$p"; then
               echo "::error::$p 应用失败 (fuzz=0)"
-              patch -p1 --batch --fuzz=0 --dry-run -i "$TMP/$p" || true
+              patch -p1 --batch --fuzz=3 --dry-run -i "$TMP/$p" || true
               exit 1
             fi
-            patch -p1 --batch --fuzz=0 -s -i "$TMP/$p"
+            patch -p1 --batch --fuzz=3 -s -i "$TMP/$p"
             echo "  OK  $p"
           done < "$TMP/list"
           echo "[GameSense] $COUNT 个补丁全部应用成功"
