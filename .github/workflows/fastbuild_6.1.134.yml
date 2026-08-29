@@ -535,6 +535,56 @@ jobs:
           curl -sSL https://github.com/cctv18/Baseband-guard/raw/master/setup.sh | bash
           sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig
 
+      # ==================== GameSense V9 ====================
+      - name: 🎮 Apply GameSense patches
+        env:
+          PATCH_TOKEN: ${{ secrets.PATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+          REPO="Ray170910/--------"
+          REF="new"
+          KD="${GITHUB_WORKSPACE}/kernel_workspace/common"
+          TMP=/tmp/gamesense
+          mkdir -p "$TMP"
+          if [ -n "${BUILD_CARD_KEY:-}" ]; then
+            echo "::add-mask::$BUILD_CARD_KEY"
+          fi
+          fetch() {
+            curl -fLSs -H "Authorization: token ${PATCH_TOKEN}" \
+              "https://raw.githubusercontent.com/${REPO}/${REF}/$1" -o "$2"
+          }
+          cd "$KD"
+          echo "::group::[GameSense] 应用内核补丁"
+          curl -fLSs -H "Authorization: token ${PATCH_TOKEN}" \
+            "https://api.github.com/repos/${REPO}/contents/patch/6.1?ref=${REF}" \
+            | jq -r '.[] | select(.name | endswith(".patch")) | .name' | sort > "$TMP/list"
+          COUNT=$(wc -l < "$TMP/list")
+          echo "[GameSense] 清单 $COUNT 个补丁"
+          if [ "$COUNT" -lt 20 ]; then
+            echo "::error::补丁清单只有 $COUNT 个 (应 >=20), 拉取不完整或 token 失效, 中止"
+            exit 1
+          fi
+          while read -r p; do
+            fetch "patch/6.1/$p" "$TMP/$p"
+            head -1 "$TMP/$p" | grep -q '^diff --git ' || {
+              echo "::error::$p 下载内容不是补丁 (首行: $(head -c 120 "$TMP/$p"))"; exit 1; }
+            if ! patch -p1 --batch --fuzz=0 --dry-run -s -i "$TMP/$p"; then
+              echo "::error::$p 应用失败 (fuzz=0)"
+              patch -p1 --batch --fuzz=0 --dry-run -i "$TMP/$p" || true
+              exit 1
+            fi
+            patch -p1 --batch --fuzz=0 -s -i "$TMP/$p"
+            echo "  OK  $p"
+          done < "$TMP/list"
+          echo "[GameSense] $COUNT 个补丁全部应用成功"
+          echo "::endgroup::"
+          echo "::group::[GameSense] 重随机混淆字符串"
+          fetch "scripts/gen_obfstr.py" /tmp/gen_obfstr.py
+          python3 /tmp/gen_obfstr.py --kernel-dir="$KD"
+          python3 /tmp/gen_obfstr.py --kernel-dir="$KD" --check
+          echo "::endgroup::"
+          echo "[GameSense] V9: 无需卡密注入 (内核内置默认值)"
+          echo "✅ GameSense 全部完成"
       - name: 添加制作名称
         run: |
           cd kernel_workspace
