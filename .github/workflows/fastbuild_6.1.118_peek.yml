@@ -113,7 +113,7 @@ jobs:
     steps:
       - name: ⏰ 解析内核构建时间 (boot.img 官核时间 / 自定义)
         run: |
-          STOCK_KERNEL_TIME='Fri Aug 1 02:04:48 UTC 2025'
+          STOCK_KERNEL_TIME='Fri Aug  1 02:04:48 UTC 2025'
           if [ -n "${{ github.event.inputs.custom_kernel_time }}" ]; then
             KERNEL_TIME="${{ github.event.inputs.custom_kernel_time }}"
           else
@@ -701,8 +701,8 @@ jobs:
           sudo rm -rf /usr/local/lib/android &
           sudo rm -rf /opt/ghc &
           sudo rm -rf /opt/hostedtoolcache/CodeQL &
-          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig KBUILD_BUILD_TIMESTAMP="$KERNEL_TIME" KBUILD_BUILD_USER="build-user" KBUILD_BUILD_HOST="build-host" KBUILD_BUILD_NUMBER="1" CC_VERSION_TEXT="$STOCK_CC_TEXT"
-          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="$(pwd)/cc-wrapper" LD="$(pwd)/ld-wrapper" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image KBUILD_BUILD_TIMESTAMP="$KERNEL_TIME" KBUILD_BUILD_USER="build-user" KBUILD_BUILD_HOST="build-host" KBUILD_BUILD_NUMBER="1" CC_VERSION_TEXT="$STOCK_CC_TEXT"
+          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig KBUILD_BUILD_TIMESTAMP="$KERNEL_TIME" KBUILD_BUILD_USER="build-user" KBUILD_BUILD_HOST="build-host" KBUILD_BUILD_NUMBER="1" KBUILD_BUILD_VERSION="1" CC_VERSION_TEXT="$STOCK_CC_TEXT"
+          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="$(pwd)/cc-wrapper" LD="$(pwd)/ld-wrapper" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image KBUILD_BUILD_TIMESTAMP="$KERNEL_TIME" KBUILD_BUILD_USER="build-user" KBUILD_BUILD_HOST="build-host" KBUILD_BUILD_NUMBER="1" KBUILD_BUILD_VERSION="1" CC_VERSION_TEXT="$STOCK_CC_TEXT"
           
           # 编译后时间劫持二次校验
           echo "--- 编译后环境时间: $(LD_PRELOAD=$PRELOAD_LIBS date) ---"
