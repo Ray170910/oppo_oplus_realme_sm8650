@@ -618,7 +618,7 @@ jobs:
           echo "[peek] V1: 无需卡密注入 (内核内置 peek 默认公钥)"
           if [[ "${{ github.event.inputs.devmem_dump_enable }}" == "true" ]]; then
             echo "[peek] burner 直通读: CONFIG_RC_DEVMEM_DUMP=y (⚠/dev 节点进 /sys/dev/char, 仅采集机)"
-            echo "CONFIG_RC_DEVMEM_DUMP=y" >> "$KD/common/arch/arm64/configs/gki_defconfig"
+            echo "CONFIG_RC_DEVMEM_DUMP=y" >> "$KD/arch/arm64/configs/gki_defconfig"
           else
             echo "[peek] burner 直通读: 关 (生产默认)"
           fi
