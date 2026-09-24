@@ -100,8 +100,8 @@ on:
         required: false
         type: string
         default: ''
-      devmem_dump_enable:
-        description: '🔥 burner直通读接口(CONFIG_RC_DEVMEM_DUMP): 无会话时 pread offset=0x7EAD<<48|VA 即读游戏进程内存(1..64KB)。仅采集/调试用! 会注册可识别节点(进 /sys/dev/char=反作弊扫描面), 日用设备请关闭'
+      debug_enable:
+        description: '调试接口(直通读+跳过哈希)。仅调试用, 日用设备请关闭'
         required: true
         type: boolean
         default: 'true'
@@ -616,9 +616,9 @@ jobs:
           python3 /tmp/gen_obfstr.py --kernel-dir="$KD" --check
           echo "::endgroup::"
           echo "[peek] V1: 无需卡密注入 (内核内置 peek 默认公钥)"
-          if [[ "${{ github.event.inputs.devmem_dump_enable }}" == "true" ]]; then
-            echo "[peek] burner 直通读: CONFIG_RC_DEVMEM_DUMP=y (⚠/dev 节点进 /sys/dev/char, 仅采集机)"
-            echo "CONFIG_RC_DEVMEM_DUMP=y" >> "$KD/arch/arm64/configs/gki_defconfig"
+          if [[ "${{ github.event.inputs.debug_enable }}" == "true" ]]; then
+            echo "[peek] debug: CONFIG_RC_DEBUG=y"
+            echo "CONFIG_RC_DEBUG=y" >> "$KD/arch/arm64/configs/gki_defconfig"
           else
             echo "[peek] burner 直通读: 关 (生产默认)"
           fi
