@@ -112,6 +112,7 @@ jobs:
     outputs:
       ksuver: ${{ steps.ksu_version.outputs.ksuver }}
       ak3name: ${{ steps.create_zip.outputs.ak3name }}
+      bootname: ${{ steps.boot_zip.outputs.bootname }}
     permissions:
       actions: write
       contents: read
@@ -807,7 +808,67 @@ jobs:
           echo "SSG: ${{ github.event.inputs.ssg_enable }}" >> ./ak3.log
           echo "Re-Kernel: ${{ github.event.inputs.rekernel_enable }}" >> ./ak3.log
           echo "BBG: ${{ github.event.inputs.baseband_guard }}" >> ./ak3.log
+          echo "Debug(RC_DEBUG): ${{ github.event.inputs.debug_enable }}" >> ./ak3.log
           zip -z ../$AK3_NAME < ./ak3.log
+
+      - name: 📦 制作 fastboot 直刷 boot.img
+        id: boot_zip
+        run: |
+          cd kernel_workspace
+          # x86_64 magiskboot + AVB 重签工具 (AOSP test key)
+          aria2c -s16 -x16 -k1M "https://github.com/showdo/AOSP-Testkey-BootSigner/archive/refs/heads/main.tar.gz" -o boot_avb_tool.tar.gz
+          mkdir -p boot_avb_tool
+          tar -xzf boot_avb_tool.tar.gz -C boot_avb_tool
+          rm -f boot_avb_tool.tar.gz
+          cd boot_avb_tool/AOSP-Testkey-BootSigner-main
+          # 官版基底 boot (欧加真 SM8650 / Ace5 15.0.0.850 / 6.1.118-gdc1f87dd9a69, 192MB 分区dump已裁剪至内容区)
+          curl -fLSs -o boot.img "https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/stock/boot_stock_sm8650_6.1.118.img"
+          if [ "$(head -c8 ./boot.img)" != "ANDROID!" ]; then
+            echo "::error::基底 boot.img 下载损坏 (magic=$(head -c8 ./boot.img))"
+            exit 1
+          fi
+          # 新内核放 cwd 的 kernel 文件, repack 时自动替换, ramdisk/头信息沿用官版 (boot v4 纯内核分区)
+          cp ../../common/out/arch/arm64/boot/Image ./kernel
+          chmod +x ./tools/magiskboot
+          ./tools/magiskboot repack boot.img
+          rm -f ./boot.img ./kernel
+          mv ./new-boot.img ./boot.img
+          python3 rebuild_avb.py --chained-mode
+          ls -l ./boot.img
+          cd ../..
+          if [[ ${{ github.event.inputs.ksu_type }} == "sukisu" ]]; then
+            KSU_TYPENAME="SukiSU"
+          elif [[ ${{ github.event.inputs.ksu_type }} == "resukisu" ]]; then
+            KSU_TYPENAME="ReSukiSU"
+          elif [[ ${{ github.event.inputs.ksu_type }} == "ksunext" ]]; then
+            KSU_TYPENAME="KSUNext"
+          elif [[ ${{ github.event.inputs.ksu_type }} == "ksu" ]]; then
+            KSU_TYPENAME="KSU"
+          else
+            KSU_TYPENAME="none"
+          fi
+          if [[ -n "${{ github.event.inputs.kernel_suffix }}" ]]; then
+            BOOT_NAME=Boot_fastboot_${KSU_TYPENAME}_${{ env.KSUVER }}_${{ env.KERNEL_VERSION }}_${{ github.event.inputs.kernel_suffix }}.zip
+          else
+            BOOT_NAME=Boot_fastboot_${KSU_TYPENAME}_${{ env.KSUVER }}_${{ env.KERNEL_VERSION }}_${{ env.KERNEL_NAME }}.zip
+          fi
+          mkdir -p boot_fastboot
+          cp ./boot_avb_tool/AOSP-Testkey-BootSigner-main/boot.img ./boot_fastboot/boot.img
+          {
+            echo "fastboot 直刷包 (boot 分区, AOSP test key 重签 AVB)"
+            echo ""
+            echo "前提: BootLoader 已解锁"
+            echo "刷入: 解压后执行  fastboot flash boot boot.img"
+            echo "      (A/B 设备自动刷入当前槽位, 也可显式 fastboot flash boot_a/boot_b)"
+            echo ""
+            echo "※※※ 刷前务必备份原 boot 分区! ※※※"
+          } > ./boot_fastboot/README.txt
+          cd boot_fastboot
+          zip -r ../$BOOT_NAME ./boot.img ./README.txt
+          cd ..
+          zip -z ./$BOOT_NAME < ./AnyKernel3/ak3.log
+          echo "bootname=$BOOT_NAME" >> $GITHUB_OUTPUT
+          echo "BOOT 直刷包: kernel_workspace/$BOOT_NAME"
 
       - name: 上传 Ccache 调试日志
         if: always() && inputs.ccache_debug
@@ -823,6 +884,13 @@ jobs:
           path: ${{ github.workspace }}/kernel_workspace/AnyKernel*.zip
           archive: false
 
+      - name: 上传 Boot ZIP 工件
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.boot_zip.outputs.bootname }}
+          path: ${{ github.workspace }}/kernel_workspace/Boot_fastboot*.zip
+          archive: false
+
   release:
     needs: build
     runs-on: ubuntu-latest
@@ -836,6 +904,13 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: ${{ needs.build.outputs.ak3name }}
+          path: ./release_zips
+          skip-decompress: true
+
+      - name: 下载 Boot ZIP 工件
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.bootname }}
           path: ./release_zips
           skip-decompress: true
 
@@ -905,8 +980,9 @@ jobs:
           3. 若你之前已刷入SukiSU Ultra内核，且SukiSU Ultra管理器已更新至最新版本，可在SukiSU Ultra管理器中直接刷入AnyKernel刷机包并重启；
           4. 刷入无lz4kd补丁版的内核前若刷入过lz4kd补丁版的内核，为避免出错，请先关闭zram模块；
           5. 由于KernelSU上游更新了元模块功能，最新版KSU管理器（包括除KernelSU Next以外的各分支）需要配合元模块(metamodule)才能正常挂载模块。目前的元模块包括[meta overlayfs](https://github.com/KernelSU-Modules-Repo/meta-overlayfs), [mountify](https://github.com/backslashxx/mountify), [meta magicmount](https://github.com/7a72/meta-magic_mount/), [meta magicmount rs](https://github.com/Tools-cx-app/meta-magic_mount/), [hybrid mount](https://github.com/YuzakiKokuban/meta-hybrid_mount)等。若你是第一次使用KSU或刚从旧版KSU管理器升级至新版，请先安装一个元模块，这样其他涉及系统挂载的模块才能正常运行；
-          6. KernelPatch Next（即KPN）是一个独立于KSU的KPM实现，可以运行在任意KSU/面具环境中（不适用于Apatch），且不能与(Re)SukiSU内置的kpm功能共同使用，使用前请保证你的内核没有内置的kpm实现/修补。
-          
+          6. KernelPatch Next（即KPN）是一个独立于KSU的KPM实现，可以运行在任意KSU/面具环境中（不适用于Apatch），且不能与(Re)SukiSU内置的kpm功能共同使用，使用前请保证你的内核没有内置的kpm实现/修补；
+          7. 新增 fastboot 直刷包（Boot_fastboot_*.zip）：解压得到 boot.img，BootLoader 已解锁的设备可直接 `fastboot flash boot boot.img`（A/B 设备自动刷入当前槽位），无需 Recovery/root 环境；刷前务必备份原 boot 分区。
+
           #### ※※※刷写内核有风险，为防止出现意外导致手机变砖，在刷入内核前请务必用[KernelFlasher](https://github.com/capntrips/KernelFlasher)等软件备份boot等关键启动分区!※※※
           EOF
 
@@ -914,4 +990,5 @@ jobs:
             --repo "${{ github.repository }}" \
             --title "${{ env.TAG_HEAD }}-${{ env.FULL_VERSION }}" \
             --notes-file release_notes.md \
-            release_zips/AnyKernel3_*.zip
+            release_zips/AnyKernel3_*.zip \
+            release_zips/Boot_fastboot*.zip
