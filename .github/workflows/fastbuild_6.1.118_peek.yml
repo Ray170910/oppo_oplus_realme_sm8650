@@ -815,37 +815,25 @@ jobs:
         id: boot_zip
         run: |
           cd kernel_workspace
-          # x86_64 magiskboot + AVB 重签工具 (AOSP test key)
-          aria2c -s16 -x16 -k1M "https://github.com/showdo/AOSP-Testkey-BootSigner/archive/refs/heads/main.tar.gz" -o boot_avb_tool.tar.gz
-          mkdir -p boot_avb_tool
-          tar -xzf boot_avb_tool.tar.gz -C boot_avb_tool
-          rm -f boot_avb_tool.tar.gz
-          cd boot_avb_tool/AOSP-Testkey-BootSigner-main
-          # 官版基底 boot (欧加真 SM8650 / Ace5 15.0.0.850 / 6.1.118-gdc1f87dd9a69, 192MB 分区dump已裁剪至内容区)
-          curl -fLSs -o boot.img "https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/stock/boot_stock_sm8650_6.1.118.img"
-          if [ "$(head -c8 ./boot.img)" != "ANDROID!" ]; then
-            echo "::error::基底 boot.img 下载损坏 (magic=$(head -c8 ./boot.img))"
-            exit 1
-          fi
-          # 新内核放 cwd 的 kernel 文件, repack 时自动替换, ramdisk/头信息沿用官版 (boot v4 纯内核分区)
-          cp ../../common/out/arch/arm64/boot/Image ./kernel
-          chmod +x ./tools/magiskboot
-          ./tools/magiskboot repack boot.img
-          rm -f ./boot.img ./kernel
-          mv ./new-boot.img ./boot.img
-          # AVB hash footer 重签: AOSP test key RSA4096
-          # 按分区实际大小 64MiB 填充 (fastboot 实测 boot_a=0x4000000),
-          # footer 落分区末尾 64B, 与官版布局同构; 64MiB < max-download
-          # (128MiB) 走 raw 直下, 不触发 sparse 转换
-          python3 tools/avbtool.py add_hash_footer \
-            --image boot.img \
-            --partition_name boot \
-            --partition_size 67108864 \
-            --algorithm SHA256_RSA4096 \
-            --key tools/pem/testkey_rsa4096.pem
-          python3 tools/avbtool.py info_image --image boot.img | head -20
+          # 打包公式与 GKI_KernelSU_SUSFS2 build.yml (Android 13+ 分支) 同源:
+          # mkbootimg 纯内核构建 (header v4, 无 ramdisk/cmdline/os_version) +
+          # avbtool 64MiB SHA256_RSA2048 footer (每次构建现生成随机 key, 解锁机
+          # 只校验 footer 结构不校验签名身份)
+          BRANCH=main-kernel-build-2024
+          git clone https://android.googlesource.com/platform/system/tools/mkbootimg -b $BRANCH --depth 1 mkbootimg
+          git clone https://android.googlesource.com/kernel/prebuilts/build-tools -b $BRANCH --depth 1 kernel-build-tools
+          MKBOOTIMG=$GITHUB_WORKSPACE/kernel_workspace/mkbootimg/mkbootimg.py
+          AVBTOOL=$GITHUB_WORKSPACE/kernel_workspace/kernel-build-tools/linux-x86/bin/avbtool
+          BOOT_KEY=$GITHUB_WORKSPACE/kernel_workspace/boot_sign_key.pem
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 > $BOOT_KEY
+          mkdir -p boot_fastboot
+          cp ./common/out/arch/arm64/boot/Image ./boot_fastboot/Image
+          cd boot_fastboot
+          python3 $MKBOOTIMG --header_version 4 --kernel Image --output boot.img
+          $AVBTOOL add_hash_footer --partition_name boot --partition_size $((64 * 1024 * 1024)) --image boot.img --algorithm SHA256_RSA2048 --key $BOOT_KEY
+          $AVBTOOL info_image --image boot.img | head -12
           ls -l ./boot.img
-          cd ../..
+          cd ..
           if [[ ${{ github.event.inputs.ksu_type }} == "sukisu" ]]; then
             KSU_TYPENAME="SukiSU"
           elif [[ ${{ github.event.inputs.ksu_type }} == "resukisu" ]]; then
@@ -863,9 +851,8 @@ jobs:
             BOOT_NAME=Boot_fastboot_${KSU_TYPENAME}_${{ env.KSUVER }}_${{ env.KERNEL_VERSION }}_${{ env.KERNEL_NAME }}.zip
           fi
           mkdir -p boot_fastboot
-          cp ./boot_avb_tool/AOSP-Testkey-BootSigner-main/boot.img ./boot_fastboot/boot.img
           {
-            echo "fastboot 直刷包 (boot 分区, AOSP test key 重签 AVB)"
+            echo "fastboot 直刷包 (boot 分区, mkbootimg v4 纯内核 + AVB RSA2048 footer, 与 GKI_KernelSU_SUSFS2 打包公式同源)"
             echo ""
             echo "前提: BootLoader 已解锁"
             echo "刷入: 解压后执行  fastboot flash boot boot.img"
