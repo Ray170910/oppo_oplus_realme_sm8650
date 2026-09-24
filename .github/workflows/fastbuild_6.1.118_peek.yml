@@ -833,11 +833,17 @@ jobs:
           ./tools/magiskboot repack boot.img
           rm -f ./boot.img ./kernel
           mv ./new-boot.img ./boot.img
-          # AVB hash footer 重签: AOSP test key RSA4096, 补齐至 boot 分区实际大小 192MiB
+          # AVB hash footer 重签: AOSP test key RSA4096
+          # 紧凑镜像不做分区填充 — 实测 boot_a=64MiB, 192MiB 填充图超出
+          # max-download(128MiB) 会触发刷机工具 sparse 转换, 设备端报
+          # "sparse image size span overflow"; 内容尺寸 raw 直下最稳
+          CONTENT_SZ=$(stat -c%s ./boot.img)
+          PART_SZ=$(( (CONTENT_SZ + 4095) / 4096 * 4096 + 131072 ))
+          echo "紧凑 partition_size=$PART_SZ (内容 $CONTENT_SZ)"
           python3 tools/avbtool.py add_hash_footer \
             --image boot.img \
             --partition_name boot \
-            --partition_size 201326592 \
+            --partition_size $PART_SZ \
             --algorithm SHA256_RSA4096 \
             --key tools/pem/testkey_rsa4096.pem
           python3 tools/avbtool.py info_image --image boot.img | head -20
