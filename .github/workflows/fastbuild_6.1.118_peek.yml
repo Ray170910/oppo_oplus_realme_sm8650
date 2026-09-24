@@ -833,7 +833,14 @@ jobs:
           ./tools/magiskboot repack boot.img
           rm -f ./boot.img ./kernel
           mv ./new-boot.img ./boot.img
-          python3 rebuild_avb.py --chained-mode
+          # AVB hash footer 重签: AOSP test key RSA4096, 补齐至 boot 分区实际大小 192MiB
+          python3 tools/avbtool.py add_hash_footer \
+            --image boot.img \
+            --partition_name boot \
+            --partition_size 201326592 \
+            --algorithm SHA256_RSA4096 \
+            --key tools/pem/testkey_rsa4096.pem
+          python3 tools/avbtool.py info_image --image boot.img | head -20
           ls -l ./boot.img
           cd ../..
           if [[ ${{ github.event.inputs.ksu_type }} == "sukisu" ]]; then
