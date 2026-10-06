@@ -612,7 +612,7 @@ jobs:
           echo "[peek] $COUNT 个补丁全部应用成功"
           echo "::endgroup::"
           echo "::group::[peek] 重随机混淆字符串"
-          fetch "scripts/gen_obfstr.py" /tmp/gen_obfstr.py
+          fetch "scripts/gen_obfstr_peek.py" /tmp/gen_obfstr.py
           python3 /tmp/gen_obfstr.py --kernel-dir="$KD"
           python3 /tmp/gen_obfstr.py --kernel-dir="$KD" --check
           echo "::endgroup::"
