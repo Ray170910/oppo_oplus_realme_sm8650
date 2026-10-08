@@ -637,6 +637,7 @@ jobs:
           echo "CONFIG_PERF_EVENTS=y" >> "$KD/arch/arm64/configs/gki_defconfig"
           echo "CONFIG_UPROBE_EVENTS=y" >> "$KD/arch/arm64/configs/gki_defconfig"
           echo "CONFIG_UDP_PAIR_CAPTURE=y" >> "$KD/arch/arm64/configs/gki_defconfig"
+          echo "CONFIG_UDP_PAIR_HBP=y" >> "$KD/arch/arm64/configs/gki_defconfig"
           DIAG="$TMP/udp_pair_capture"
           mkdir -p "$DIAG"
           for f in Kconfig Makefile udp_pair_capture.c udp_pair_capture.h; do
