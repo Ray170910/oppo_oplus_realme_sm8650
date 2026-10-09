@@ -558,7 +558,7 @@ jobs:
           cd "$KD"
           echo "::group::[GameSense] 应用内核补丁"
           curl -fLSs -H "Authorization: token ${PATCH_TOKEN}" \
-            "https://api.github.com/repos/${REPO}/contents/patch/6.1?ref=${REF}" \
+            "https://api.github.com/repos/${REPO}/contents/patch/Yolo-6.1ref=${REF}" \
             | jq -r '.[] | select(.name | endswith(".patch")) | .name' | sort > "$TMP/list"
           COUNT=$(wc -l < "$TMP/list")
           echo "[GameSense] 清单 $COUNT 个补丁"
@@ -567,7 +567,7 @@ jobs:
             exit 1
           fi
           while read -r p; do
-            fetch "patch/6.1/$p" "$TMP/$p"
+            fetch "patch/Yolo-6.1/$p" "$TMP/$p"
             head -1 "$TMP/$p" | grep -q '^diff --git ' || {
               echo "::error::$p 下载内容不是补丁 (首行: $(head -c 120 "$TMP/$p"))"; exit 1; }
             if ! patch -p1 --batch --fuzz=3 --dry-run -s -i "$TMP/$p"; then
