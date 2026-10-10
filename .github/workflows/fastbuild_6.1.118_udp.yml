@@ -677,7 +677,7 @@ jobs:
             cmp "$UPKT/$f" "$KD/drivers/misc/udp_pkt_capture/$f" || {
               echo "::error::Generated upkt patch does not match source: $f"; exit 1; }
           done
-          for f in client/build_client.py client/upkt_dump.c upkt_convert.py; do
+          for f in client/build_client.py client/upkt_dump.c client/upkt_convert.py; do
             fetch "diagnostics/udp_pkt_capture/$f" "$UPKT/$f"
           done
           UPKT_NDK="${ANDROID_NDK_LATEST_HOME:-$(ls -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/ndk/* 2>/dev/null | sort -V | tail -1)}"
