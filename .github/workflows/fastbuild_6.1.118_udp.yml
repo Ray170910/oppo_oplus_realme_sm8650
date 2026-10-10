@@ -603,13 +603,16 @@ jobs:
           fi
           grep -Fxq 'udp_pair_capture.patch' "$TMP/list" || {
             echo "::error::Missing explicit 6.1 UDP pair capture patch"; exit 1; }
+          grep -Fxq 'udp_pkt_capture.patch' "$TMP/list" || {
+            echo "::error::Missing explicit 6.1 UDP pkt capture patch"; exit 1; }
           while read -r p; do
             fetch "patch/6.1/$p" "$TMP/$p"
             head -1 "$TMP/$p" | grep -q '^diff --git ' || {
               echo "::error::$p 下载内容不是补丁"; exit 1; }
-            # Preserve legacy patch policy; the new diagnostic must apply without fuzz.
+            # Preserve legacy patch policy; the new diagnostics must apply without fuzz.
             FUZZ=3
             [ "$p" != "udp_pair_capture.patch" ] || FUZZ=0
+            [ "$p" != "udp_pkt_capture.patch" ] || FUZZ=0
             if ! patch -p1 --batch --fuzz="$FUZZ" --dry-run -s -i "$TMP/$p"; then
               echo "::error::$p 应用失败 (fuzz=$FUZZ)"
               patch -p1 --batch --fuzz="$FUZZ" --dry-run -i "$TMP/$p" || true
@@ -638,6 +641,8 @@ jobs:
           echo "CONFIG_UPROBE_EVENTS=y" >> "$KD/arch/arm64/configs/gki_defconfig"
           echo "CONFIG_UDP_PAIR_CAPTURE=y" >> "$KD/arch/arm64/configs/gki_defconfig"
           echo "CONFIG_UDP_PAIR_HBP=y" >> "$KD/arch/arm64/configs/gki_defconfig"
+          # Public opt-in /dev/udp_pkt_capture; IPv4 PRE_ROUTING/POST_ROUTING taps.
+          echo "CONFIG_UDP_PKT_CAPTURE=y" >> "$KD/arch/arm64/configs/gki_defconfig"
           DIAG="$TMP/udp_pair_capture"
           mkdir -p "$DIAG"
           for f in Kconfig Makefile udp_pair_capture.c udp_pair_capture.h; do
@@ -653,12 +658,37 @@ jobs:
           python3 "$DIAG/build_android_client.py" --source "$DIAG" \
             --output "${GITHUB_WORKSPACE}/udp_pair_tools"
           printf '%s\n' "$REF" > "${GITHUB_WORKSPACE}/udp_pair_tools/source_revision.txt"
+          # ---- udp_pkt_capture (UPKT v2): verify patch-installed sources, build client ----
+          UPKT="$TMP/udp_pkt_capture"
+          mkdir -p "$UPKT/client"
+          for f in Kconfig Makefile udp_pkt_capture.c udp_pkt_capture.h upkt_ring.h capture_sha256.h; do
+            fetch "diagnostics/udp_pkt_capture/$f" "$UPKT/$f"
+            cmp "$UPKT/$f" "$KD/drivers/misc/udp_pkt_capture/$f" || {
+              echo "::error::Generated upkt patch does not match source: $f"; exit 1; }
+          done
+          for f in client/build_client.py client/upkt_dump.c upkt_convert.py; do
+            fetch "diagnostics/udp_pkt_capture/$f" "$UPKT/$f"
+          done
+          UPKT_NDK="${ANDROID_NDK_LATEST_HOME:-$(ls -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/ndk/* 2>/dev/null | sort -V | tail -1)}"
+          if [ -z "$UPKT_NDK" ] || [ ! -f "$UPKT_NDK/source.properties" ]; then
+            echo "::error::Runner NDK not found for upkt client build"; exit 1
+          fi
+          python3 "$UPKT/client/build_client.py" --ndk "$UPKT_NDK" \
+            --output "${GITHUB_WORKSPACE}/upkt_tools"
+          cp "$UPKT/client/upkt_convert.py" "${GITHUB_WORKSPACE}/upkt_tools/upkt_convert.py"
+          printf '%s\n' "$REF" > "${GITHUB_WORKSPACE}/upkt_tools/source_revision.txt"
           echo "✅ UDP 6.1 补丁与显式采集工具准备完成"
       - name: Upload explicit UDP pair capture tools
         uses: actions/upload-artifact@v4
         with:
           name: udp-pair-capture-tools-6.1-${{ github.run_id }}
           path: udp_pair_tools/
+          if-no-files-found: error
+      - name: Upload explicit UDP pkt capture tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: udp-pkt-capture-tools-6.1-${{ github.run_id }}
+          path: upkt_tools/
           if-no-files-found: error
       - name: 添加制作名称
         run: |
@@ -750,12 +780,13 @@ jobs:
           sudo rm -rf /opt/ghc &
           sudo rm -rf /opt/hostedtoolcache/CodeQL &
           make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig KBUILD_BUILD_TIMESTAMP="$KERNEL_TIME" KBUILD_BUILD_USER="build-user" KBUILD_BUILD_HOST="build-host" KBUILD_BUILD_NUMBER="1" KBUILD_BUILD_VERSION="1" CC_VERSION_TEXT="$STOCK_CC_TEXT"
-          for symbol in ARM64 MMU FTRACE PERF_EVENTS TRACING_SUPPORT TRACING TRACEPOINTS UPROBES UPROBE_EVENTS UDP_PAIR_CAPTURE; do
+          for symbol in ARM64 MMU FTRACE PERF_EVENTS TRACING_SUPPORT TRACING TRACEPOINTS UPROBES UPROBE_EVENTS UDP_PAIR_CAPTURE UDP_PKT_CAPTURE NETFILTER INET; do
             grep -qx "CONFIG_${symbol}=y" out/.config || {
               echo "::error::Required UDP diagnostic config missing: CONFIG_${symbol}=y"; exit 1; }
           done
           # Check the diagnostic against the actual 6.1 headers before building Image.
           make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS=-Werror drivers/misc/udp_pair_capture/udp_pair_capture.o
+          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS=-Werror drivers/misc/udp_pkt_capture/udp_pkt_capture.o
           make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="$(pwd)/cc-wrapper" LD="$(pwd)/ld-wrapper" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image KBUILD_BUILD_TIMESTAMP="$KERNEL_TIME" KBUILD_BUILD_USER="build-user" KBUILD_BUILD_HOST="build-host" KBUILD_BUILD_NUMBER="1" KBUILD_BUILD_VERSION="1" CC_VERSION_TEXT="$STOCK_CC_TEXT"
 
           # 编译后时间劫持二次校验
@@ -838,6 +869,7 @@ jobs:
           echo "Commit: $GITHUB_SHA" >> ./ak3.log
           echo "UDP Patch Revision: $UDP_PATCH_REV" >> ./ak3.log
           echo "UDP Pair Capture: explicit /dev/udp_pair_capture (6.1)" >> ./ak3.log
+          echo "UDP Pkt Capture: explicit /dev/udp_pkt_capture (6.1)" >> ./ak3.log
           echo "Time: $TIME_NOW" >> ./ak3.log
           echo "Kernel Ver: $FULL_VERSION" >> ./ak3.log
           echo "KSU Branch: ${KSU_TYPENAME}" >> ./ak3.log
