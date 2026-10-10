@@ -587,11 +587,19 @@ jobs:
             echo "::add-mask::$BUILD_CARD_KEY"
           fi
           fetch() {
-            # Retry all errors: raw.githubusercontent may briefly 404 files from a
-            # very fresh push even after the contents API already lists them.
-            curl -fLSs --retry 4 --retry-delay 3 --retry-all-errors \
-              -H "Authorization: token ${PATCH_TOKEN}" \
-              "https://raw.githubusercontent.com/${REPO}/${REF}/$1" -o "$2"
+            # raw CDN may serve stale 404 for freshly pushed private-repo files on
+            # some edges (observed >20min); the contents API is not cached that way
+            # and already served the patch listing, so use it as the fallback.
+            if ! curl -fLSs --retry 2 --retry-delay 2 --retry-all-errors \
+                -H "Authorization: token ${PATCH_TOKEN}" \
+                "https://raw.githubusercontent.com/${REPO}/${REF}/$1" -o "$2"; then
+              echo "[udp] raw 失败, 改走 contents API: $1"
+              curl -fLSs --retry 3 --retry-delay 2 --retry-all-errors \
+                -H "Authorization: token ${PATCH_TOKEN}" \
+                "https://api.github.com/repos/${REPO}/contents/$1?ref=${REF}" \
+                | jq -er '.content' | base64 -d > "$2" || {
+                  echo "::error::fetch failed (raw+api): ${REPO}/${REF}/$1"; return 1; }
+            fi
           }
           cd "$KD"
           echo "::group::[udp] 应用内核补丁"
