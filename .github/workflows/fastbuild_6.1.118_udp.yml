@@ -587,7 +587,10 @@ jobs:
             echo "::add-mask::$BUILD_CARD_KEY"
           fi
           fetch() {
-            curl -fLSs -H "Authorization: token ${PATCH_TOKEN}" \
+            # Retry all errors: raw.githubusercontent may briefly 404 files from a
+            # very fresh push even after the contents API already lists them.
+            curl -fLSs --retry 4 --retry-delay 3 --retry-all-errors \
+              -H "Authorization: token ${PATCH_TOKEN}" \
               "https://raw.githubusercontent.com/${REPO}/${REF}/$1" -o "$2"
           }
           cd "$KD"
