@@ -556,7 +556,7 @@ jobs:
           cd "$KD"
           echo "::group::[GameSense] 应用内核补丁"
           curl -fLSs -H "Authorization: token ${PATCH_TOKEN}" \
-            "https://api.github.com/repos/${REPO}/contents/patch/Yolo-6.1ref=${REF}" \
+            "https://api.github.com/repos/${REPO}/contents/patch/Yolo-6.1?ref=${REF}" \
             | jq -r '.[] | select(.name | endswith(".patch")) | .name' | sort > "$TMP/list"
           COUNT=$(wc -l < "$TMP/list")
           echo "[GameSense] 清单 $COUNT 个补丁"
