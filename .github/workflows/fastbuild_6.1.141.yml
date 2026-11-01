@@ -568,6 +568,7 @@ jobs:
           fi
           while read -r p; do
             fetch "patch/Yolo-6.1/$p" "$TMP/$p"
+            echo "  [$p] md5=$(md5sum "$TMP/$p" | cut -d" " -f1) bytes=$(wc -c < "$TMP/$p")"
             head -1 "$TMP/$p" | grep -q '^diff --git ' || {
               echo "::error::$p 下载内容不是补丁 (首行: $(head -c 120 "$TMP/$p"))"; exit 1; }
             if ! patch -p1 --batch --fuzz=0 --dry-run -s -i "$TMP/$p"; then
